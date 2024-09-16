@@ -16,10 +16,6 @@ import matplotlib.pyplot as plt
 import time
 import subprocess
 
-start_time = time.time()
-time_limit = 43080
-time_margin = 3480
-
 from tensorflow.keras.models import Model, load_model, Sequential
 from tensorflow.keras.layers import Dense, Conv2D, MaxPool2D, Dropout, Flatten, GlobalAveragePooling2D, Concatenate, Input
 from tensorflow.keras.layers import Resizing, Rescaling, RandomFlip, RandomRotation, RandomZoom, Lambda
@@ -78,7 +74,7 @@ val_ds = image_dataset_from_directory(validation_dir, labels = 'inferred', label
 
 class_weight = {}
 classes = np.concatenate([y for x, y in train_ds], axis = 0).argmax(axis = 1)
-for i, w in enumerate(compute_class_weight('balanced', classes = [0, 1, 2, 3, 4], y = classes)):
+for i, w in enumerate(compute_class_weight('balanced', classes = [0, 1], y = classes)):
     class_weight[i] = w * args.high_wt if w > 1 else w 
 print(class_weight)
 
@@ -155,7 +151,7 @@ if args.mode == 'initiate':
 
     x = Dense(fc_node, activation = 'relu', name = 'fc')(x)
     x = Dropout(0.3, name = 'do')(x)
-    output_layer = Dense(5, activation = 'softmax', name = 'cl')(x)
+    output_layer = Dense(2, activation = 'softmax', name = 'cl')(x)
     model = Model(inputs = input_layer, outputs = output_layer)
 
 elif args.mode == 'resume':
@@ -180,7 +176,6 @@ elif args.mode == 'resume':
 csv_logger = CSVLogger(log_dir / 'log.csv', append = True)
 
 # Training
-max_time = 0
 
 # stage 1: train top layer only
 if freeze_epochs > 0:
@@ -202,17 +197,11 @@ if freeze_epochs > 0:
     
     for epoch in range(latest_epoch, args.freeze_epochs):
         current_time = time.time()
-        if time_limit - (current_time - start_time) < max(time_margin, max_time):
-            model.save(log_dir / f'checkpoint_e{epoch}', save_format = 'tf')
-            print(f'{time_limit - (current_time - start_time)} seconds left, stopping at epoch {latest_epoch}')
-            break
         history = model.fit(train_ds, validation_data = val_ds, epochs = epoch + 1, initial_epoch = epoch, class_weight = class_weight, callbacks = [csv_logger])
         if history.history['val_accuracy'][0] > best_val_acc:
             model.save(log_dir / f'best_e{epoch + 1}', save_format = 'tf')
             best_val_acc = history.history['val_accuracy'][0]
         latest_epoch = epoch + 1
-        if time.time() - current_time > max_time:
-            max_time = time.time() - current_time
 
 # stage 2: unfreeze all layers
 if fine_tune_epochs > 0:
@@ -234,27 +223,9 @@ if fine_tune_epochs > 0:
     
     for epoch in range(latest_epoch, (args.fine_tune_epochs + args.freeze_epochs)):
         current_time = time.time()
-        if time_limit - (current_time - start_time) < max(time_margin, max_time):
-            model.save(log_dir / f'checkpoint_e{epoch}', save_format = 'tf')
-            print(f'{time_limit - (current_time - start_time)} seconds left, stopping at epoch {latest_epoch}')
-            break
         history = model.fit(train_ds, validation_data = val_ds, epochs = epoch + 1, initial_epoch = epoch, class_weight = class_weight, callbacks = [csv_logger])
         if history.history['val_accuracy'][0] > best_val_acc:
             model.save(log_dir / f'best_e{epoch + 1}', save_format = 'tf')
             best_val_acc = history.history['val_accuracy'][0]
         latest_epoch = epoch + 1
-        if time.time() - current_time > max_time:
-            max_time = time.time() - current_time
-
-if latest_epoch < (args.freeze_epochs + args.fine_tune_epochs):
-    # not finish yet, submit another job with --mode resume
-    job_name = os.environ['SLURM_JOB_NAME']
-    command = f'cd {log_dir} && sbatch -A yu_ky98 --job-name={job_name} -p gpu --gres=gpu:1 -t 0-11:58 -n 1 --mem 12G ../../0codes/setup.sh python New_Classification.py {args.directory} --mode resume --architecture {args.architecture} --optimizer {args.optimizer} --batch_size {args.batch_size} --freeze_lr {args.freeze_lr} --freeze_epochs {args.freeze_epochs} --fine_tune_epochs {args.fine_tune_epochs} --high_wt {args.high_wt}'
-else:
-    # submit job to Test.py for learning curve and test set evaluation
-    model.save(log_dir / f'final_e{(args.freeze_epochs+args.fine_tune_epochs)}', save_format = 'tf')
-    job_name = 't_' + os.environ['SLURM_JOB_NAME']
-    command = f'cd {log_dir} && sbatch -A yu_ky98 --job-name={job_name} -p gpu --gres=gpu:1 -t 0-02:29 -n 1 --mem 12G ../../0codes/setup.sh python New_Testing.py {args.directory} {log_dir.name}'
-    
-report = subprocess.check_call(command, shell = True, executable = '/bin/bash', text = True)
-print(report)
+        

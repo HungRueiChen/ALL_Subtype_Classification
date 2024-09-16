@@ -64,8 +64,8 @@ class NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 # define variables
-classes = ['ALL', 'AML', 'CML', 'Lymphoma', 'MM']
-mother_dir = Path('../') / args.directory
+classes = ['B-ALL', 'T-ALL']
+mother_dir = Path('/media/chia/_note/16tb2/ALL_Subtype_Classification') / args.directory
 log_dir = mother_dir / args.log
 test_dir = mother_dir / args.subset
 '''
