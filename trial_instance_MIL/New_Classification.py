@@ -35,6 +35,7 @@ from tensorflow.keras.applications.efficientnet_v2 import EfficientNetV2B3
 from tensorflow.keras.utils import image_dataset_from_directory
 from tensorflow.keras.callbacks import ModelCheckpoint, CSVLogger, TensorBoard, EarlyStopping
 from tensorflow_addons.optimizers import RectifiedAdam
+from AlexNet.alexnet import AlexNet
 
 from sklearn.metrics import confusion_matrix, roc_curve, auc, f1_score, matthews_corrcoef, cohen_kappa_score
 from sklearn.utils.class_weight import compute_class_weight
@@ -43,7 +44,7 @@ from sklearn.utils.class_weight import compute_class_weight
 parser = argparse.ArgumentParser(description="Train and Test with Metrics on Given Directory", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("directory", help = 'image directory, must contain 3 subdirectories: train, val, test')
 parser.add_argument("--mode", choices = ['initiate', 'resume'], default = 'initiate', help = 'start from epoch 1 or resume from last stored model')
-parser.add_argument("--architecture", choices = ['vgg16', 'inceptionv3', 'resnet50', 'densenet121', 'xception', 'mobilenetv3large', 'inceptionresnetv2', 'nasnetmobile', 'convnexttiny', 'efficientnetv2b3'], default = 'vgg16', help = 'CNN backbbone architecture')
+parser.add_argument("--architecture", choices = ['alexnet', 'vgg16', 'inceptionv3', 'resnet50', 'densenet121', 'xception', 'mobilenetv3large', 'inceptionresnetv2', 'nasnetmobile', 'convnexttiny', 'efficientnetv2b3'], default = 'vgg16', help = 'CNN backbbone architecture')
 parser.add_argument("--optimizer", choices = ['SGD', 'Adam', 'RMSprop', 'rAdam'], default = 'SGD', help = 'optimizer')
 parser.add_argument("--batch_size", type = int, default = 8, help = 'batch size')
 parser.add_argument("--freeze_lr", type = str, default = '0.001', help = 'learning rate when base model is freezed at first, fine tune lr will be 1/10 of freeze lr')
@@ -97,7 +98,11 @@ if args.mode == 'initiate':
     freeze_epochs = args.freeze_epochs
     fine_tune_epochs = args.fine_tune_epochs
     
-    if args.architecture == 'vgg16':
+    if args.architecture == 'alexnet':
+        base_model = AlexNet(include_top = False)
+        preprocess_fn = lambda x: x / 127.5 -1
+        resize_side = 227
+    elif args.architecture == 'vgg16':
         base_model = VGG16(include_top = False, weights = 'imagenet', pooling = 'avg')
         preprocess_fn = tf.keras.applications.vgg16.preprocess_input
         resize_side = 224
